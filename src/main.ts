@@ -42,12 +42,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
             </div>
           </nav>
 
-          <section class="kn-route">
-            <h2 id="kn-route-title" class="kn-heading-2"></h2>
-            <p id="kn-route-subtext" class="kn-body-text kn-body-muted">
-              This section will be built in the next step.
-            </p>
-          </section>
+          <section class="kn-route" id="kn-route-root"></section>
         </div>
 
         <aside class="kn-workspace-secondary"></aside>
@@ -106,22 +101,10 @@ type RoutePath = '/' | '/dashboard' | '/saved' | '/digest' | '/settings' | '/pro
 
 type RouteKey = RoutePath | 'not-found'
 
-type RouteConfig = {
-  title: string
-}
-
-const routes: Record<RoutePath, RouteConfig> = {
-  '/': { title: 'Dashboard' },
-  '/dashboard': { title: 'Dashboard' },
-  '/saved': { title: 'Saved' },
-  '/digest': { title: 'Digest' },
-  '/settings': { title: 'Settings' },
-  '/proof': { title: 'Proof' },
-}
-
 function normalizePath(pathname: string): RouteKey {
   const cleaned = (pathname || '/').toLowerCase()
-  if (cleaned === '/' || cleaned === '/dashboard') return '/dashboard'
+  if (cleaned === '/') return '/'
+  if (cleaned === '/dashboard') return '/dashboard'
   if (cleaned === '/saved') return '/saved'
   if (cleaned === '/digest') return '/digest'
   if (cleaned === '/settings') return '/settings'
@@ -130,24 +113,128 @@ function normalizePath(pathname: string): RouteKey {
 }
 
 function renderRoute(pathname: RouteKey) {
-  const titleEl = document.getElementById('kn-route-title')
-  const subtextEl = document.getElementById('kn-route-subtext')
+  const container = document.getElementById('kn-route-root')
+  if (!container) return
 
   if (pathname === 'not-found') {
-    if (titleEl) {
-      titleEl.textContent = 'Page Not Found'
-    }
-    if (subtextEl) {
-      subtextEl.textContent = 'The page you are looking for does not exist.'
-    }
-  } else {
-    const config = routes[pathname] ?? routes['/dashboard']
-    if (titleEl) {
-      titleEl.textContent = config.title
-    }
-    if (subtextEl) {
-      subtextEl.textContent = 'This section will be built in the next step.'
-    }
+    container.innerHTML = `
+      <div class="kn-empty-state">
+        <h2 class="kn-heading-2">Page Not Found</h2>
+        <p class="kn-body-text kn-body-muted">
+          The page you are looking for does not exist.
+        </p>
+      </div>
+    `
+    return
+  }
+
+  if (pathname === '/') {
+    container.innerHTML = `
+      <div class="kn-hero">
+        <h2 class="kn-heading-1">Stop Missing The Right Jobs.</h2>
+        <p class="kn-body-text kn-body-muted">
+          Precision-matched job discovery delivered daily at 9AM.
+        </p>
+        <div class="kn-hero-actions">
+          <button type="button" class="kn-button kn-button-primary" id="kn-cta-start">
+            Start Tracking
+          </button>
+        </div>
+      </div>
+    `
+
+    const cta = document.getElementById('kn-cta-start')
+    cta?.addEventListener('click', () => {
+      const target: RoutePath = '/settings'
+      window.history.pushState({ path: target }, '', target)
+      renderRoute(target)
+      setActiveLink(target)
+    })
+    return
+  }
+
+  if (pathname === '/dashboard') {
+    container.innerHTML = `
+      <div class="kn-card kn-dashboard-card">
+        <h2 class="kn-heading-2">Dashboard</h2>
+        <p class="kn-body-text kn-body-muted">
+          No jobs yet. In the next step, you will load a realistic dataset.
+        </p>
+      </div>
+    `
+    return
+  }
+
+  if (pathname === '/settings') {
+    container.innerHTML = `
+      <div class="kn-card kn-settings-card">
+        <div class="kn-settings-header">
+          <h2 class="kn-heading-2">Settings</h2>
+          <p class="kn-body-text kn-body-muted">
+            This section will be built in the next step.
+          </p>
+        </div>
+        <div class="kn-settings-grid">
+          <div class="kn-field-group">
+            <label class="kn-label" for="role-keywords">Role keywords</label>
+            <input id="role-keywords" class="kn-input" placeholder="Example: Frontend Engineer, Product Designer" />
+          </div>
+          <div class="kn-field-group">
+            <label class="kn-label" for="preferred-locations">Preferred locations</label>
+            <input id="preferred-locations" class="kn-input" placeholder="Cities, regions, or time zones" />
+          </div>
+          <div class="kn-field-group">
+            <label class="kn-label" for="mode">Mode</label>
+            <select id="mode" class="kn-input kn-select">
+              <option>Remote</option>
+              <option>Hybrid</option>
+              <option>Onsite</option>
+            </select>
+          </div>
+          <div class="kn-field-group">
+            <label class="kn-label" for="experience-level">Experience level</label>
+            <input id="experience-level" class="kn-input" placeholder="Example: Junior, Mid, Senior" />
+          </div>
+        </div>
+      </div>
+    `
+    return
+  }
+
+  if (pathname === '/saved') {
+    container.innerHTML = `
+      <div class="kn-card kn-empty-card">
+        <h2 class="kn-heading-2">Saved</h2>
+        <p class="kn-body-text kn-body-muted">
+          When you mark roles that matter, they will appear here for calm review.
+        </p>
+      </div>
+    `
+    return
+  }
+
+  if (pathname === '/digest') {
+    container.innerHTML = `
+      <div class="kn-card kn-empty-card">
+        <h2 class="kn-heading-2">Digest</h2>
+        <p class="kn-body-text kn-body-muted">
+          Your daily 9AM job digest will be designed here in the next step.
+        </p>
+      </div>
+    `
+    return
+  }
+
+  if (pathname === '/proof') {
+    container.innerHTML = `
+      <div class="kn-card kn-empty-card">
+        <h2 class="kn-heading-2">Proof</h2>
+        <p class="kn-body-text kn-body-muted">
+          Placeholders for screenshots, links, and artifacts will live here once collection is added.
+        </p>
+      </div>
+    `
+    return
   }
 }
 
@@ -156,7 +243,7 @@ function setActiveLink(pathname: RouteKey) {
   links.forEach((link) => {
     const href = link.getAttribute('href') || '/'
     const normalized = normalizePath(href)
-    if (pathname !== 'not-found' && normalized === pathname) {
+    if (pathname !== 'not-found' && pathname !== '/' && normalized === pathname) {
       link.classList.add('kn-subnav-link-active')
     } else {
       link.classList.remove('kn-subnav-link-active')

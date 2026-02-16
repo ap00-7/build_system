@@ -263,6 +263,78 @@ body {
   background-color: var(--kn-color-surface-soft);
 }
 
+/* Hero landing */
+
+.kn-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+}
+
+.kn-hero-actions {
+  margin-top: var(--kn-space-2);
+}
+
+/* Forms and settings */
+
+.kn-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+}
+
+.kn-settings-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-1);
+}
+
+.kn-settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+}
+
+.kn-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-1);
+}
+
+.kn-label {
+  font-size: 14px;
+  color: var(--kn-color-text-subtle);
+}
+
+.kn-input {
+  height: 40px;
+  padding: 0 var(--kn-space-2);
+  border-radius: var(--kn-radius-md);
+  border: 1px solid var(--kn-color-border-subtle);
+  background-color: transparent;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--kn-color-text);
+}
+
+.kn-input:focus {
+  outline: none;
+  border-color: var(--kn-color-accent);
+}
+
+.kn-select {
+  appearance: none;
+}
+
+/* Empty states and dashboard */
+
+.kn-dashboard-card,
+.kn-empty-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-1);
+}
+
 /* Buttons */
 
 .kn-button {
