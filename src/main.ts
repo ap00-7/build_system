@@ -1,4 +1,5 @@
 import './style.css'
+import { jobs, type Job } from './jobs.ts'
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="kn-app">
@@ -101,6 +102,62 @@ type RoutePath = '/' | '/dashboard' | '/saved' | '/digest' | '/settings' | '/pro
 
 type RouteKey = RoutePath | 'not-found'
 
+type FilterState = {
+  keyword: string
+  location: string
+  mode: string
+  experience: string
+  source: string
+  sort: 'latest' | 'oldest'
+}
+
+const SAVED_JOBS_KEY = 'kn-saved-jobs'
+
+function readSavedJobIds(): string[] {
+  try {
+    const raw = window.localStorage.getItem(SAVED_JOBS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((id): id is string => typeof id === 'string')
+  } catch {
+    return []
+  }
+}
+
+function writeSavedJobIds(ids: string[]): void {
+  try {
+    window.localStorage.setItem(SAVED_JOBS_KEY, JSON.stringify(ids))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function isJobSaved(id: string): boolean {
+  return readSavedJobIds().includes(id)
+}
+
+function toggleSavedJob(id: string): void {
+  const current = readSavedJobIds()
+  const exists = current.includes(id)
+  const next = exists ? current.filter((x) => x !== id) : [...current, id]
+  writeSavedJobIds(next)
+}
+
+function findJobById(id: string): Job | undefined {
+  return jobs.find((job) => job.id === id)
+}
+
+function formatExperience(exp: Job['experience']): string {
+  return exp === 'Fresher' ? 'Fresher' : `${exp} yrs`
+}
+
+function formatPostedAgo(days: number): string {
+  if (days === 0) return 'Today'
+  if (days === 1) return '1 day ago'
+  return `${days} days ago`
+}
+
 function normalizePath(pathname: string): RouteKey {
   const cleaned = (pathname || '/').toLowerCase()
   if (cleaned === '/') return '/'
@@ -155,13 +212,214 @@ function renderRoute(pathname: RouteKey) {
 
   if (pathname === '/dashboard') {
     container.innerHTML = `
-      <div class="kn-card kn-dashboard-card">
-        <h2 class="kn-heading-2">Dashboard</h2>
-        <p class="kn-body-text kn-body-muted">
-          No jobs yet. In the next step, you will load a realistic dataset.
-        </p>
+      <div class="kn-dashboard">
+        <div class="kn-filter-bar">
+          <div class="kn-filter-row">
+            <div class="kn-filter-field">
+              <label class="kn-label" for="kn-filter-keyword">Search</label>
+              <input id="kn-filter-keyword" class="kn-input" placeholder="Role or company" />
+            </div>
+            <div class="kn-filter-field">
+              <label class="kn-label" for="kn-filter-location">Location</label>
+              <select id="kn-filter-location" class="kn-input kn-select">
+                <option value="all">All</option>
+                <option value="Bengaluru">Bengaluru</option>
+                <option value="Chennai">Chennai</option>
+                <option value="Hyderabad">Hyderabad</option>
+                <option value="Pune">Pune</option>
+                <option value="Mumbai">Mumbai</option>
+                <option value="Noida">Noida</option>
+                <option value="Gurugram">Gurugram</option>
+                <option value="Kolkata">Kolkata</option>
+                <option value="Mysuru">Mysuru</option>
+              </select>
+            </div>
+            <div class="kn-filter-field">
+              <label class="kn-label" for="kn-filter-mode">Mode</label>
+              <select id="kn-filter-mode" class="kn-input kn-select">
+                <option value="all">All</option>
+                <option value="Remote">Remote</option>
+                <option value="Hybrid">Hybrid</option>
+                <option value="Onsite">Onsite</option>
+              </select>
+            </div>
+          </div>
+          <div class="kn-filter-row">
+            <div class="kn-filter-field">
+              <label class="kn-label" for="kn-filter-experience">Experience</label>
+              <select id="kn-filter-experience" class="kn-input kn-select">
+                <option value="all">All</option>
+                <option value="Fresher">Fresher</option>
+                <option value="0-1">0-1</option>
+                <option value="1-3">1-3</option>
+                <option value="3-5">3-5</option>
+              </select>
+            </div>
+            <div class="kn-filter-field">
+              <label class="kn-label" for="kn-filter-source">Source</label>
+              <select id="kn-filter-source" class="kn-input kn-select">
+                <option value="all">All</option>
+                <option value="LinkedIn">LinkedIn</option>
+                <option value="Naukri">Naukri</option>
+                <option value="Indeed">Indeed</option>
+              </select>
+            </div>
+            <div class="kn-filter-field">
+              <label class="kn-label" for="kn-filter-sort">Sort</label>
+              <select id="kn-filter-sort" class="kn-input kn-select">
+                <option value="latest">Latest</option>
+                <option value="oldest">Oldest</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="kn-job-list" class="kn-job-list"></div>
       </div>
     `
+
+    const state: FilterState = {
+      keyword: '',
+      location: 'all',
+      mode: 'all',
+      experience: 'all',
+      source: 'all',
+      sort: 'latest',
+    }
+
+    const keywordInput = container.querySelector<HTMLInputElement>('#kn-filter-keyword')
+    const locationSelect = container.querySelector<HTMLSelectElement>('#kn-filter-location')
+    const modeSelect = container.querySelector<HTMLSelectElement>('#kn-filter-mode')
+    const experienceSelect = container.querySelector<HTMLSelectElement>('#kn-filter-experience')
+    const sourceSelect = container.querySelector<HTMLSelectElement>('#kn-filter-source')
+    const sortSelect = container.querySelector<HTMLSelectElement>('#kn-filter-sort')
+    const listEl = container.querySelector<HTMLDivElement>('#kn-job-list')
+
+    function applyFilters(): Job[] {
+      let next = [...jobs]
+
+      if (state.keyword.trim()) {
+        const kw = state.keyword.trim().toLowerCase()
+        next = next.filter(
+          (job) =>
+            job.title.toLowerCase().includes(kw) ||
+            job.company.toLowerCase().includes(kw),
+        )
+      }
+
+      if (state.location !== 'all') {
+        next = next.filter((job) => job.location.includes(state.location))
+      }
+
+      if (state.mode !== 'all') {
+        next = next.filter((job) => job.mode === state.mode)
+      }
+
+      if (state.experience !== 'all') {
+        next = next.filter((job) => job.experience === state.experience)
+      }
+
+      if (state.source !== 'all') {
+        next = next.filter((job) => job.source === state.source)
+      }
+
+      next.sort((a, b) =>
+        state.sort === 'latest'
+          ? a.postedDaysAgo - b.postedDaysAgo
+          : b.postedDaysAgo - a.postedDaysAgo,
+      )
+
+      return next
+    }
+
+    function renderJobs(list: Job[]) {
+      if (!listEl) return
+      if (list.length === 0) {
+        listEl.innerHTML = `
+          <div class="kn-card kn-empty-card">
+            <h2 class="kn-heading-2">No jobs found</h2>
+            <p class="kn-body-text kn-body-muted">
+              Adjust your filters or search terms and try again.
+            </p>
+          </div>
+        `
+        return
+      }
+
+      const items = list
+        .map((job) => {
+          return `
+            <article class="kn-card kn-job-card" data-job-id="${job.id}">
+              <header class="kn-job-header">
+                <div>
+                  <h3 class="kn-heading-3">${job.title}</h3>
+                  <p class="kn-body-text kn-body-muted">${job.company}</p>
+                </div>
+                <span class="kn-tag kn-tag-source">${job.source}</span>
+              </header>
+              <div class="kn-job-meta">
+                <span>${job.location} · ${job.mode}</span>
+                <span>${formatExperience(job.experience)}</span>
+                <span>${job.salaryRange}</span>
+                <span>${formatPostedAgo(job.postedDaysAgo)}</span>
+              </div>
+              <div class="kn-job-actions">
+                <button type="button" class="kn-button kn-button-secondary kn-job-view" data-job-id="${job.id}">
+                  View
+                </button>
+                <button type="button" class="kn-button kn-button-secondary kn-job-save" data-job-id="${job.id}">
+                  ${isJobSaved(job.id) ? 'Saved' : 'Save'}
+                </button>
+                <button type="button" class="kn-button kn-button-primary kn-job-apply" data-job-id="${job.id}">
+                  Apply
+                </button>
+              </div>
+            </article>
+          `
+        })
+        .join('')
+
+      listEl.innerHTML = items
+      attachJobCardHandlers(listEl)
+    }
+
+    function handleFilterChange() {
+      const filtered = applyFilters()
+      renderJobs(filtered)
+    }
+
+    keywordInput?.addEventListener('input', (event) => {
+      const value = (event.target as HTMLInputElement).value
+      state.keyword = value
+      handleFilterChange()
+    })
+
+    locationSelect?.addEventListener('change', (event) => {
+      state.location = (event.target as HTMLSelectElement).value
+      handleFilterChange()
+    })
+
+    modeSelect?.addEventListener('change', (event) => {
+      state.mode = (event.target as HTMLSelectElement).value
+      handleFilterChange()
+    })
+
+    experienceSelect?.addEventListener('change', (event) => {
+      state.experience = (event.target as HTMLSelectElement).value
+      handleFilterChange()
+    })
+
+    sourceSelect?.addEventListener('change', (event) => {
+      state.source = (event.target as HTMLSelectElement).value
+      handleFilterChange()
+    })
+
+    sortSelect?.addEventListener('change', (event) => {
+      const value = (event.target as HTMLSelectElement).value as 'latest' | 'oldest'
+      state.sort = value
+      handleFilterChange()
+    })
+
+    handleFilterChange()
     return
   }
 
@@ -202,14 +460,89 @@ function renderRoute(pathname: RouteKey) {
   }
 
   if (pathname === '/saved') {
+    const savedIds = readSavedJobIds()
+    const savedJobs = jobs.filter((job) => savedIds.includes(job.id))
+
+    if (savedJobs.length === 0) {
+      container.innerHTML = `
+        <div class="kn-empty-state kn-empty-state-premium">
+          <div class="kn-empty-state-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <h2 class="kn-heading-2">Your saved jobs</h2>
+          <p class="kn-body-text kn-body-muted kn-empty-state-desc">
+            Save roles that interest you from the Dashboard. They'll appear here for focused review when you're ready to apply.
+          </p>
+          <a href="/dashboard" data-route class="kn-button kn-button-primary kn-empty-state-cta">
+            Browse jobs
+          </a>
+        </div>
+      `
+      const cta = container.querySelector<HTMLAnchorElement>('.kn-empty-state-cta')
+      cta?.addEventListener('click', (e) => {
+        e.preventDefault()
+        const target: RoutePath = '/dashboard'
+        window.history.pushState({ path: target }, '', target)
+        renderRoute(target)
+        setActiveLink(target)
+      })
+      return
+    }
+
     container.innerHTML = `
-      <div class="kn-card kn-empty-card">
-        <h2 class="kn-heading-2">Saved</h2>
-        <p class="kn-body-text kn-body-muted">
-          When you mark roles that matter, they will appear here for calm review.
-        </p>
+      <div class="kn-saved">
+        <div class="kn-saved-header">
+          <h2 class="kn-heading-2">Saved roles</h2>
+          <p class="kn-body-text kn-body-muted">
+            A focused view of roles you want to keep an eye on.
+          </p>
+        </div>
+        <div id="kn-saved-list" class="kn-job-list"></div>
       </div>
     `
+
+    const listEl = container.querySelector<HTMLDivElement>('#kn-saved-list')
+
+    if (listEl) {
+      const items = savedJobs
+        .map((job) => {
+          return `
+            <article class="kn-card kn-job-card" data-job-id="${job.id}">
+              <header class="kn-job-header">
+                <div>
+                  <h3 class="kn-heading-3">${job.title}</h3>
+                  <p class="kn-body-text kn-body-muted">${job.company}</p>
+                </div>
+                <span class="kn-tag kn-tag-source">${job.source}</span>
+              </header>
+              <div class="kn-job-meta">
+                <span>${job.location} · ${job.mode}</span>
+                <span>${formatExperience(job.experience)}</span>
+                <span>${job.salaryRange}</span>
+                <span>${formatPostedAgo(job.postedDaysAgo)}</span>
+              </div>
+              <div class="kn-job-actions">
+                <button type="button" class="kn-button kn-button-secondary kn-job-view" data-job-id="${job.id}">
+                  View
+                </button>
+                <button type="button" class="kn-button kn-button-secondary kn-job-save" data-job-id="${job.id}">
+                  Saved
+                </button>
+                <button type="button" class="kn-button kn-button-primary kn-job-apply" data-job-id="${job.id}">
+                  Apply
+                </button>
+              </div>
+            </article>
+          `
+        })
+        .join('')
+
+      listEl.innerHTML = items
+      attachJobCardHandlers(listEl)
+    }
+
     return
   }
 
@@ -236,6 +569,106 @@ function renderRoute(pathname: RouteKey) {
     `
     return
   }
+}
+
+function attachJobCardHandlers(root: HTMLElement) {
+  const viewButtons = root.querySelectorAll<HTMLButtonElement>('.kn-job-view')
+  const saveButtons = root.querySelectorAll<HTMLButtonElement>('.kn-job-save')
+  const applyButtons = root.querySelectorAll<HTMLButtonElement>('.kn-job-apply')
+
+  viewButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.getAttribute('data-job-id')
+      if (!id) return
+      const job = findJobById(id)
+      if (!job) return
+      openJobModal(job)
+    })
+  })
+
+  saveButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.getAttribute('data-job-id')
+      if (!id) return
+      toggleSavedJob(id)
+      const saved = isJobSaved(id)
+      button.textContent = saved ? 'Saved' : 'Save'
+      const path = normalizePath(window.location.pathname)
+      if (path === '/saved' && !saved) {
+        renderRoute('/saved')
+        setActiveLink('/saved')
+      }
+    })
+  })
+
+  applyButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.getAttribute('data-job-id')
+      if (!id) return
+      const job = findJobById(id)
+      if (!job) return
+      window.open(job.applyUrl, '_blank', 'noopener')
+    })
+  })
+}
+
+function openJobModal(job: Job) {
+  const existing = document.querySelector<HTMLElement>('.kn-modal-overlay')
+  existing?.remove()
+
+  const overlay = document.createElement('div')
+  overlay.className = 'kn-modal-overlay'
+  overlay.innerHTML = `
+    <div class="kn-modal">
+      <header class="kn-modal-header">
+        <div>
+          <h2 class="kn-heading-2">${job.title}</h2>
+          <p class="kn-body-text kn-body-muted">${job.company} · ${job.location} · ${job.mode}</p>
+        </div>
+        <button type="button" class="kn-button kn-button-secondary kn-modal-close">
+          Close
+        </button>
+      </header>
+      <section class="kn-modal-body">
+        <div class="kn-modal-section">
+          <h3 class="kn-heading-3">Description</h3>
+          <p class="kn-body-text kn-modal-description"></p>
+        </div>
+        <div class="kn-modal-section">
+          <h3 class="kn-heading-3">Skills</h3>
+          <div class="kn-skill-chips"></div>
+        </div>
+      </section>
+    </div>
+  `
+
+  const descriptionEl = overlay.querySelector<HTMLParagraphElement>('.kn-modal-description')
+  if (descriptionEl) {
+    descriptionEl.textContent = job.description
+  }
+
+  const skillsEl = overlay.querySelector<HTMLDivElement>('.kn-skill-chips')
+  if (skillsEl) {
+    job.skills.forEach((skill) => {
+      const chip = document.createElement('span')
+      chip.className = 'kn-tag kn-tag-skill'
+      chip.textContent = skill
+      skillsEl.appendChild(chip)
+    })
+  }
+
+  const closeButton = overlay.querySelector<HTMLButtonElement>('.kn-modal-close')
+  closeButton?.addEventListener('click', () => {
+    overlay.remove()
+  })
+
+  overlay.addEventListener('click', (event) => {
+    if (event.target === overlay) {
+      overlay.remove()
+    }
+  })
+
+  document.body.appendChild(overlay)
 }
 
 function setActiveLink(pathname: RouteKey) {

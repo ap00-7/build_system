@@ -335,6 +335,201 @@ body {
   gap: var(--kn-space-1);
 }
 
+/* Premium empty state */
+
+.kn-empty-state-premium {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--kn-space-5);
+  min-height: 320px;
+  gap: var(--kn-space-3);
+}
+
+.kn-empty-state-premium .kn-heading-2 {
+  margin: 0;
+}
+
+.kn-empty-state-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(139, 0, 0, 0.06) 0%, rgba(139, 0, 0, 0.02) 100%);
+  color: var(--kn-color-accent);
+}
+
+.kn-empty-state-desc {
+  max-width: 400px;
+  line-height: 1.6;
+}
+
+.kn-empty-state-cta {
+  margin-top: var(--kn-space-1);
+  text-decoration: none;
+}
+
+/* Dashboard jobs */
+
+.kn-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+}
+
+.kn-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+}
+
+.kn-filter-row {
+  display: flex;
+  gap: var(--kn-space-3);
+  flex-wrap: wrap;
+}
+
+.kn-filter-field {
+  min-width: 200px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-1);
+}
+
+.kn-job-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+}
+
+.kn-job-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+  padding: var(--kn-space-3);
+  transition: box-shadow var(--kn-transition-fast), border-color var(--kn-transition-fast);
+}
+
+.kn-job-card:hover {
+  border-color: var(--kn-color-border-strong);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.kn-job-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--kn-space-2);
+}
+
+.kn-job-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kn-space-1);
+  font-size: 14px;
+  color: var(--kn-color-text-subtle);
+}
+
+.kn-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kn-space-1);
+}
+
+.kn-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--kn-space-1);
+  border-radius: var(--kn-radius-md);
+  border: 1px solid var(--kn-color-border-subtle);
+  font-size: 12px;
+  color: var(--kn-color-text-subtle);
+  background-color: rgba(17, 17, 17, 0.02);
+}
+
+.kn-tag-source {
+  flex-shrink: 0;
+  border-color: var(--kn-color-border-strong);
+  font-weight: 500;
+  color: var(--kn-color-text-muted);
+}
+
+.kn-saved {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+}
+
+.kn-saved-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-1);
+}
+
+/* Modal */
+
+.kn-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--kn-space-4);
+  z-index: 40;
+}
+
+.kn-modal {
+  max-width: 720px;
+  width: 100%;
+  background-color: var(--kn-color-surface-soft);
+  border-radius: var(--kn-radius-md);
+  border: 1px solid var(--kn-color-border-subtle);
+  padding: var(--kn-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+}
+
+.kn-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--kn-space-2);
+}
+
+.kn-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-3);
+}
+
+.kn-modal-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-1);
+}
+
+.kn-modal-description {
+  white-space: pre-line;
+}
+
+.kn-skill-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kn-space-1);
+}
+
+.kn-tag-skill {
+  border-color: var(--kn-color-border-subtle);
+}
+
 /* Buttons */
 
 .kn-button {
