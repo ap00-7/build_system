@@ -8,7 +8,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <span class="kn-project-name">KodNest Premium Build System</span>
       </div>
       <div class="kn-topbar-center">
-        <span class="kn-progress-text">Step 1 / 4</span>
+        <span class="kn-progress-text">Steps 0 / 8</span>
       </div>
       <div class="kn-topbar-right">
         <span class="kn-badge kn-badge-status-in-progress">In Progress</span>
@@ -41,7 +41,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
               <a href="/settings" data-route class="kn-subnav-link">Settings</a>
               <a href="/jt/07-test" data-route class="kn-subnav-link">Test</a>
               <a href="/jt/08-ship" data-route class="kn-subnav-link">Ship</a>
-              <a href="/proof" data-route class="kn-subnav-link">Proof</a>
+              <a href="/jt/proof" data-route class="kn-subnav-link">Proof</a>
             </div>
           </nav>
 
@@ -108,6 +108,7 @@ type RoutePath =
   | '/settings'
   | '/jt/07-test'
   | '/jt/08-ship'
+  | '/jt/proof'
   | '/proof'
 
 type RouteKey = RoutePath | 'not-found'
@@ -153,6 +154,152 @@ function getTestsPassedCount(): number {
 
 function areAllTestsPassed(): boolean {
   return getTestsPassedCount() === TEST_CHECKLIST_ITEMS.length
+}
+
+const JT_ARTIFACTS_KEY = 'jtProject1Artifacts'
+
+type JTArtifacts = {
+  lovableProject: string
+  githubRepository: string
+  liveDeployment: string
+}
+
+const EMPTY_ARTIFACTS: JTArtifacts = {
+  lovableProject: '',
+  githubRepository: '',
+  liveDeployment: '',
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function readArtifacts(): JTArtifacts {
+  try {
+    const raw = window.localStorage.getItem(JT_ARTIFACTS_KEY)
+    if (!raw) return { ...EMPTY_ARTIFACTS }
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object') return { ...EMPTY_ARTIFACTS }
+    const obj = parsed as Record<string, unknown>
+    return {
+      lovableProject: typeof obj.lovableProject === 'string' ? obj.lovableProject : '',
+      githubRepository: typeof obj.githubRepository === 'string' ? obj.githubRepository : '',
+      liveDeployment: typeof obj.liveDeployment === 'string' ? obj.liveDeployment : '',
+    }
+  } catch {
+    return { ...EMPTY_ARTIFACTS }
+  }
+}
+
+function writeArtifacts(next: JTArtifacts): void {
+  try {
+    window.localStorage.setItem(JT_ARTIFACTS_KEY, JSON.stringify(next))
+  } catch {
+    /* ignore */
+  }
+}
+
+function areAllArtifactLinksProvidedAndValid(): boolean {
+  const a = readArtifacts()
+  return (
+    a.lovableProject.trim() !== '' &&
+    a.githubRepository.trim() !== '' &&
+    a.liveDeployment.trim() !== '' &&
+    isValidHttpUrl(a.lovableProject.trim()) &&
+    isValidHttpUrl(a.githubRepository.trim()) &&
+    isValidHttpUrl(a.liveDeployment.trim())
+  )
+}
+
+type ProjectStatus = 'Not Started' | 'In Progress' | 'Shipped'
+
+type StepSummary = { label: string; status: 'Completed' | 'Pending' }
+
+function getProjectSteps(): StepSummary[] {
+  const prefsSet = hasPreferencesSet(readPreferences())
+  const savedCount = readSavedJobIds().length
+  const statusMap = readJobStatuses()
+  const anyStatusChanged = Object.values(statusMap).some((s) => s !== 'Not Applied')
+  const historyCount = readStatusHistory().length
+  const digestExists = readDigest(getTodayDateKey()) !== null
+  const testsPassed = getTestsPassedCount()
+  const allTests = areAllTestsPassed()
+  const artifactsOk = areAllArtifactLinksProvidedAndValid()
+
+  const steps: StepSummary[] = [
+    { label: 'Preferences configured', status: prefsSet ? 'Completed' : 'Pending' },
+    { label: 'Intelligent match scoring active', status: prefsSet ? 'Completed' : 'Pending' },
+    { label: 'Saved roles tracked', status: savedCount > 0 ? 'Completed' : 'Pending' },
+    { label: 'Status tracking used', status: anyStatusChanged || historyCount > 0 ? 'Completed' : 'Pending' },
+    { label: 'Daily digest simulated', status: digestExists ? 'Completed' : 'Pending' },
+    { label: 'Test checklist started', status: testsPassed > 0 ? 'Completed' : 'Pending' },
+    { label: 'All tests passed (10/10)', status: allTests ? 'Completed' : 'Pending' },
+    { label: 'Artifacts collected (3 links)', status: artifactsOk ? 'Completed' : 'Pending' },
+  ]
+
+  return steps
+}
+
+function getProjectStatus(): ProjectStatus {
+  const shipped = areAllTestsPassed() && areAllArtifactLinksProvidedAndValid()
+  if (shipped) return 'Shipped'
+
+  const artifacts = readArtifacts()
+  const prefsSet = hasPreferencesSet(readPreferences())
+  const savedCount = readSavedJobIds().length
+  const statusMap = readJobStatuses()
+  const anyStatusChanged = Object.values(statusMap).some((s) => s !== 'Not Applied')
+  const historyCount = readStatusHistory().length
+  const digestExists = readDigest(getTodayDateKey()) !== null
+  const testsPassed = getTestsPassedCount()
+  const anyArtifactStarted =
+    artifacts.lovableProject.trim() !== '' ||
+    artifacts.githubRepository.trim() !== '' ||
+    artifacts.liveDeployment.trim() !== ''
+
+  const started =
+    prefsSet ||
+    savedCount > 0 ||
+    anyStatusChanged ||
+    historyCount > 0 ||
+    digestExists ||
+    testsPassed > 0 ||
+    anyArtifactStarted
+
+  return started ? 'In Progress' : 'Not Started'
+}
+
+function getProjectStatusBadgeClass(status: ProjectStatus): string {
+  switch (status) {
+    case 'Not Started':
+      return 'kn-badge kn-badge-status-not-started'
+    case 'In Progress':
+      return 'kn-badge kn-badge-status-in-progress'
+    case 'Shipped':
+      return 'kn-badge kn-badge-status-shipped'
+  }
+}
+
+function updateTopbarProjectStatus(): void {
+  const badge = document.querySelector<HTMLElement>('.kn-topbar-right .kn-badge')
+  const progress = document.querySelector<HTMLElement>('.kn-topbar-center .kn-progress-text')
+
+  const status = getProjectStatus()
+  const steps = getProjectSteps()
+  const completed = steps.filter((s) => s.status === 'Completed').length
+
+  if (badge) {
+    badge.className = getProjectStatusBadgeClass(status)
+    badge.textContent = status
+  }
+  if (progress) {
+    progress.textContent = `Steps ${completed} / ${steps.length}`
+  }
 }
 
 type FilterState = {
@@ -553,6 +700,7 @@ function normalizePath(pathname: string): RouteKey {
   if (cleaned === '/settings') return '/settings'
   if (cleaned === '/jt/07-test') return '/jt/07-test'
   if (cleaned === '/jt/08-ship') return '/jt/08-ship'
+  if (cleaned === '/jt/proof') return '/jt/proof'
   if (cleaned === '/proof') return '/proof'
   return 'not-found'
 }
@@ -1315,6 +1463,7 @@ function renderRoute(pathname: RouteKey) {
         if (idx < 0 || idx >= checks.length) return
         checks[idx] = cb.checked
         writeTestChecklist(checks)
+        updateTopbarProjectStatus()
         const passed = checks.filter(Boolean).length
         const summaryEl = container.querySelector('.kn-test-summary .kn-heading-2')
         const warningEl = container.querySelector('.kn-test-warning')
@@ -1333,6 +1482,7 @@ function renderRoute(pathname: RouteKey) {
     container.querySelector('#kn-test-reset')?.addEventListener('click', () => {
       const empty = new Array(TEST_CHECKLIST_ITEMS.length).fill(false)
       writeTestChecklist(empty)
+      updateTopbarProjectStatus()
       const target: RoutePath = '/jt/07-test'
       window.history.pushState({ path: target }, '', target)
       renderRoute(target)
@@ -1343,6 +1493,7 @@ function renderRoute(pathname: RouteKey) {
 
   if (pathname === '/jt/08-ship') {
     const allPassed = areAllTestsPassed()
+    const artifactsOk = areAllArtifactLinksProvidedAndValid()
 
     if (!allPassed) {
       container.innerHTML = `
@@ -1362,14 +1513,247 @@ function renderRoute(pathname: RouteKey) {
       return
     }
 
+    if (!artifactsOk) {
+      container.innerHTML = `
+        <div class="kn-ship-locked">
+          <div class="kn-empty-state-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          <h2 class="kn-heading-2">Ship locked</h2>
+          <p class="kn-body-text kn-body-muted kn-empty-state-desc">
+            Add all 3 required links in Proof to unlock Ship.
+          </p>
+          <a href="/jt/proof" data-route class="kn-button kn-button-primary">Go to Proof</a>
+        </div>
+      `
+      return
+    }
+
     container.innerHTML = `
       <div class="kn-ship-ready">
         <h2 class="kn-heading-2">Ready to ship</h2>
         <p class="kn-body-text kn-body-muted">
-          All tests passed. You're clear to deploy.
+          All tests passed and proof links are collected. You're clear to submit.
         </p>
+        <div class="kn-ship-confirmation" role="status">
+          Project 1 Shipped Successfully.
+        </div>
       </div>
     `
+    return
+  }
+
+  if (pathname === '/jt/proof') {
+    const steps = getProjectSteps()
+    const artifacts = readArtifacts()
+    const shipped = getProjectStatus() === 'Shipped'
+
+    container.innerHTML = `
+      <div class="kn-proof-page">
+        <header class="kn-proof-header">
+          <div>
+            <h2 class="kn-heading-2">Project 1 — Job Notification Tracker</h2>
+            <p class="kn-body-text kn-body-muted">Final proof and submission export.</p>
+          </div>
+          <span class="${getProjectStatusBadgeClass(getProjectStatus())}">${getProjectStatus()}</span>
+        </header>
+
+        ${shipped ? `
+          <div class="kn-ship-confirmation" role="status">Project 1 Shipped Successfully.</div>
+        ` : ''}
+
+        <section class="kn-proof-section">
+          <h3 class="kn-heading-3">A) Step Completion Summary</h3>
+          <ul class="kn-proof-steps">
+            ${steps
+              .map(
+                (s) => `
+              <li class="kn-proof-step">
+                <span class="kn-proof-step-label">${escapeHtml(s.label)}</span>
+                <span class="kn-proof-step-status ${s.status === 'Completed' ? 'kn-proof-step-completed' : 'kn-proof-step-pending'}">
+                  ${s.status}
+                </span>
+              </li>
+            `,
+              )
+              .join('')}
+          </ul>
+        </section>
+
+        <section class="kn-proof-section">
+          <h3 class="kn-heading-3">B) Artifact Collection Inputs</h3>
+          <p class="kn-body-text kn-body-muted kn-proof-note">
+            Required links are stored locally in your browser.
+          </p>
+
+          <div class="kn-proof-form">
+            <div class="kn-field-group">
+              <label class="kn-label" for="kn-proof-lovable">Lovable Project Link</label>
+              <input id="kn-proof-lovable" class="kn-input" placeholder="https://..." value="${escapeHtml(artifacts.lovableProject)}" />
+              <div class="kn-field-error" id="kn-proof-lovable-error" aria-live="polite"></div>
+            </div>
+
+            <div class="kn-field-group">
+              <label class="kn-label" for="kn-proof-github">GitHub Repository Link</label>
+              <input id="kn-proof-github" class="kn-input" placeholder="https://github.com/..." value="${escapeHtml(artifacts.githubRepository)}" />
+              <div class="kn-field-error" id="kn-proof-github-error" aria-live="polite"></div>
+            </div>
+
+            <div class="kn-field-group">
+              <label class="kn-label" for="kn-proof-live">Deployed URL (Vercel or equivalent)</label>
+              <input id="kn-proof-live" class="kn-input" placeholder="https://your-app.vercel.app" value="${escapeHtml(artifacts.liveDeployment)}" />
+              <div class="kn-field-error" id="kn-proof-live-error" aria-live="polite"></div>
+            </div>
+          </div>
+
+          <div class="kn-proof-actions">
+            <button type="button" class="kn-button kn-button-primary" id="kn-proof-copy">
+              Copy Final Submission
+            </button>
+          </div>
+        </section>
+      </div>
+    `
+
+    const lovableInput = container.querySelector<HTMLInputElement>('#kn-proof-lovable')
+    const githubInput = container.querySelector<HTMLInputElement>('#kn-proof-github')
+    const liveInput = container.querySelector<HTMLInputElement>('#kn-proof-live')
+
+    const lovableErr = container.querySelector<HTMLDivElement>('#kn-proof-lovable-error')
+    const githubErr = container.querySelector<HTMLDivElement>('#kn-proof-github-error')
+    const liveErr = container.querySelector<HTMLDivElement>('#kn-proof-live-error')
+
+    const touched: Record<keyof JTArtifacts, boolean> = {
+      lovableProject: false,
+      githubRepository: false,
+      liveDeployment: false,
+    }
+
+    function validateField(value: string): string {
+      const trimmed = value.trim()
+      if (!trimmed) return 'Required'
+      if (!isValidHttpUrl(trimmed)) return 'Enter a valid URL (must start with http/https).'
+      return ''
+    }
+
+    function renderErrors(current: JTArtifacts): boolean {
+      const lovableMsg = touched.lovableProject ? validateField(current.lovableProject) : ''
+      const githubMsg = touched.githubRepository ? validateField(current.githubRepository) : ''
+      const liveMsg = touched.liveDeployment ? validateField(current.liveDeployment) : ''
+
+      if (lovableErr) lovableErr.textContent = lovableMsg
+      if (githubErr) githubErr.textContent = githubMsg
+      if (liveErr) liveErr.textContent = liveMsg
+
+      lovableInput?.classList.toggle('kn-input-error', lovableMsg !== '')
+      githubInput?.classList.toggle('kn-input-error', githubMsg !== '')
+      liveInput?.classList.toggle('kn-input-error', liveMsg !== '')
+
+      return lovableMsg === '' && githubMsg === '' && liveMsg === ''
+    }
+
+    function persistArtifacts(partial: Partial<JTArtifacts>) {
+      const current = readArtifacts()
+      const next: JTArtifacts = { ...current, ...partial }
+      writeArtifacts(next)
+      renderErrors(next)
+      updateTopbarProjectStatus()
+    }
+
+    lovableInput?.addEventListener('input', () => persistArtifacts({ lovableProject: lovableInput.value }))
+    githubInput?.addEventListener('input', () => persistArtifacts({ githubRepository: githubInput.value }))
+    liveInput?.addEventListener('input', () => persistArtifacts({ liveDeployment: liveInput.value }))
+
+    lovableInput?.addEventListener('blur', () => {
+      touched.lovableProject = true
+      renderErrors(readArtifacts())
+    })
+    githubInput?.addEventListener('blur', () => {
+      touched.githubRepository = true
+      renderErrors(readArtifacts())
+    })
+    liveInput?.addEventListener('blur', () => {
+      touched.liveDeployment = true
+      renderErrors(readArtifacts())
+    })
+
+    const copyBtn = container.querySelector<HTMLButtonElement>('#kn-proof-copy')
+
+    async function copyTextToClipboard(text: string): Promise<boolean> {
+      try {
+        await navigator.clipboard.writeText(text)
+        return true
+      } catch {
+        try {
+          const ta = document.createElement('textarea')
+          ta.value = text
+          ta.setAttribute('readonly', 'true')
+          ta.style.position = 'fixed'
+          ta.style.left = '-9999px'
+          document.body.appendChild(ta)
+          ta.select()
+          const ok = document.execCommand('copy')
+          ta.remove()
+          return ok
+        } catch {
+          return false
+        }
+      }
+    }
+
+    copyBtn?.addEventListener('click', async () => {
+      touched.lovableProject = true
+      touched.githubRepository = true
+      touched.liveDeployment = true
+
+      const current = readArtifacts()
+      const ok = renderErrors(current)
+
+      if (!ok) {
+        showToast('Add all 3 valid links before copying.')
+        return
+      }
+
+      const payload = [
+        '------------------------------------------',
+        'Job Notification Tracker — Final Submission',
+        '',
+        'Lovable Project:',
+        current.lovableProject.trim(),
+        '',
+        'GitHub Repository:',
+        current.githubRepository.trim(),
+        '',
+        'Live Deployment:',
+        current.liveDeployment.trim(),
+        '',
+        'Core Features:',
+        '- Intelligent match scoring',
+        '- Daily digest simulation',
+        '- Status tracking',
+        '- Test checklist enforced',
+        '------------------------------------------',
+      ].join('\n')
+
+      const copied = await copyTextToClipboard(payload)
+      if (copied) {
+        showToast('Final submission copied.')
+        if (copyBtn) {
+          const original = copyBtn.textContent
+          copyBtn.textContent = 'Copied!'
+          setTimeout(() => {
+            if (copyBtn) copyBtn.textContent = original || 'Copy Final Submission'
+          }, 2000)
+        }
+      } else {
+        showToast('Copy failed. Please try again.')
+      }
+    })
+
+    renderErrors(readArtifacts())
+    updateTopbarProjectStatus()
     return
   }
 
@@ -1543,6 +1927,7 @@ function setupNavigation() {
     window.history.pushState({ path: normalized }, '', normalized)
     renderRoute(normalized)
     setActiveLink(normalized)
+    updateTopbarProjectStatus()
     if (subnav) {
       subnav.classList.remove('kn-subnav-open')
     }
@@ -1554,6 +1939,7 @@ function setupNavigation() {
     const normalized = normalizePath(pathname)
     renderRoute(normalized)
     setActiveLink(normalized)
+    updateTopbarProjectStatus()
   })
 }
 
@@ -1561,3 +1947,4 @@ const initialPath = normalizePath(window.location.pathname)
 renderRoute(initialPath)
 setActiveLink(initialPath)
 setupNavigation()
+updateTopbarProjectStatus()
