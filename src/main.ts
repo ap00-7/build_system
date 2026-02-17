@@ -108,6 +108,7 @@ type FilterState = {
   mode: string
   experience: string
   source: string
+  status: string
   sort: 'latest' | 'match' | 'salary'
   showOnlyMatches: boolean
 }
@@ -122,7 +123,127 @@ function escapeHtml(s: string): string {
 
 const SAVED_JOBS_KEY = 'kn-saved-jobs'
 const PREFERENCES_KEY = 'jobTrackerPreferences'
+const STATUS_KEY = 'jobTrackerStatus'
+const STATUS_HISTORY_KEY = 'jobTrackerStatusHistory'
 const DIGEST_PREFIX = 'jobTrackerDigest_'
+
+type JobStatus = 'Not Applied' | 'Applied' | 'Rejected' | 'Selected'
+
+type StatusHistoryEntry = {
+  jobId: string
+  status: 'Applied' | 'Rejected' | 'Selected'
+  changedAt: string
+}
+
+function readJobStatuses(): Record<string, JobStatus> {
+  try {
+    const raw = window.localStorage.getItem(STATUS_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object') return {}
+    const obj = parsed as Record<string, unknown>
+    const result: Record<string, JobStatus> = {}
+    for (const [k, v] of Object.entries(obj)) {
+      if (
+        v === 'Not Applied' ||
+        v === 'Applied' ||
+        v === 'Rejected' ||
+        v === 'Selected'
+      ) {
+        result[k] = v
+      }
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+function writeJobStatuses(map: Record<string, JobStatus>): void {
+  try {
+    window.localStorage.setItem(STATUS_KEY, JSON.stringify(map))
+  } catch {
+    /* ignore */
+  }
+}
+
+function getJobStatus(jobId: string): JobStatus {
+  const map = readJobStatuses()
+  const s = map[jobId]
+  return s ?? 'Not Applied'
+}
+
+function setJobStatus(jobId: string, status: JobStatus): void {
+  const map = readJobStatuses()
+  map[jobId] = status
+  writeJobStatuses(map)
+}
+
+function readStatusHistory(): StatusHistoryEntry[] {
+  try {
+    const raw = window.localStorage.getItem(STATUS_HISTORY_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (x): x is StatusHistoryEntry =>
+        x &&
+        typeof x === 'object' &&
+        typeof (x as StatusHistoryEntry).jobId === 'string' &&
+        (['Applied', 'Rejected', 'Selected'] as const).includes(
+          (x as StatusHistoryEntry).status,
+        ) &&
+        typeof (x as StatusHistoryEntry).changedAt === 'string',
+    )
+  } catch {
+    return []
+  }
+}
+
+function addStatusHistory(
+  jobId: string,
+  status: 'Applied' | 'Rejected' | 'Selected',
+): void {
+  const history = readStatusHistory()
+  history.unshift({
+    jobId,
+    status,
+    changedAt: new Date().toISOString(),
+  })
+  const trimmed = history.slice(0, 50)
+  try {
+    window.localStorage.setItem(STATUS_HISTORY_KEY, JSON.stringify(trimmed))
+  } catch {
+    /* ignore */
+  }
+}
+
+function showToast(message: string): void {
+  const existing = document.querySelector('.kn-toast')
+  existing?.remove()
+  const toast = document.createElement('div')
+  toast.className = 'kn-toast'
+  toast.textContent = message
+  document.body.appendChild(toast)
+  requestAnimationFrame(() => toast.classList.add('kn-toast-visible'))
+  setTimeout(() => {
+    toast.classList.remove('kn-toast-visible')
+    setTimeout(() => toast.remove(), 300)
+  }, 2500)
+}
+
+function getStatusBadgeClass(status: JobStatus): string {
+  switch (status) {
+    case 'Not Applied':
+      return 'kn-status-badge kn-status-neutral'
+    case 'Applied':
+      return 'kn-status-badge kn-status-applied'
+    case 'Rejected':
+      return 'kn-status-badge kn-status-rejected'
+    case 'Selected':
+      return 'kn-status-badge kn-status-selected'
+  }
+}
 
 type DigestEntry = { id: string; matchScore: number }
 
@@ -486,6 +607,16 @@ function renderRoute(pathname: RouteKey) {
               </select>
             </div>
             <div class="kn-filter-field">
+              <label class="kn-label" for="kn-filter-status">Status</label>
+              <select id="kn-filter-status" class="kn-input kn-select">
+                <option value="all">All</option>
+                <option value="Not Applied">Not Applied</option>
+                <option value="Applied">Applied</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Selected">Selected</option>
+              </select>
+            </div>
+            <div class="kn-filter-field">
               <label class="kn-label" for="kn-filter-sort">Sort</label>
               <select id="kn-filter-sort" class="kn-input kn-select">
                 <option value="latest">Latest</option>
@@ -499,6 +630,9 @@ function renderRoute(pathname: RouteKey) {
               <input type="checkbox" id="kn-show-only-matches" class="kn-checkbox" />
               <span>Show only jobs above my threshold</span>
             </label>
+            <button type="button" class="kn-button kn-button-secondary" id="kn-filter-clear-all">
+              Clear All
+            </button>
           </div>
         </div>
         <div id="kn-job-list" class="kn-job-list"></div>
@@ -511,12 +645,15 @@ function renderRoute(pathname: RouteKey) {
       mode: 'all',
       experience: 'all',
       source: 'all',
+      status: 'all',
       sort: 'latest',
       showOnlyMatches: false,
     }
 
     const keywordInput = container.querySelector<HTMLInputElement>('#kn-filter-keyword')
     const locationSelect = container.querySelector<HTMLSelectElement>('#kn-filter-location')
+    const statusSelect = container.querySelector<HTMLSelectElement>('#kn-filter-status')
+    const clearAllBtn = container.querySelector<HTMLButtonElement>('#kn-filter-clear-all')
     const modeSelect = container.querySelector<HTMLSelectElement>('#kn-filter-mode')
     const experienceSelect = container.querySelector<HTMLSelectElement>('#kn-filter-experience')
     const sourceSelect = container.querySelector<HTMLSelectElement>('#kn-filter-source')
@@ -555,6 +692,10 @@ function renderRoute(pathname: RouteKey) {
 
       if (state.source !== 'all') {
         next = next.filter((job) => job.source === state.source)
+      }
+
+      if (state.status !== 'all') {
+        next = next.filter((job) => getJobStatus(job.id) === state.status)
       }
 
       if (state.showOnlyMatches) {
@@ -596,6 +737,7 @@ function renderRoute(pathname: RouteKey) {
       const items = list
         .map((job) => {
           const badgeClass = getMatchBadgeClass(job.matchScore)
+          const jobStatus = getJobStatus(job.id)
           return `
             <article class="kn-card kn-job-card" data-job-id="${job.id}">
               <header class="kn-job-header">
@@ -614,6 +756,12 @@ function renderRoute(pathname: RouteKey) {
                 <span>${job.salaryRange}</span>
                 <span>${formatPostedAgo(job.postedDaysAgo)}</span>
               </div>
+              <div class="kn-job-status-group">
+                ${(['Not Applied', 'Applied', 'Rejected', 'Selected'] as const).map(
+                  (s) =>
+                    `<button type="button" class="kn-status-btn ${jobStatus === s ? getStatusBadgeClass(s) : 'kn-status-btn-inactive'}" data-job-id="${job.id}" data-status="${s}">${s}</button>`,
+                ).join('')}
+              </div>
               <div class="kn-job-actions">
                 <button type="button" class="kn-button kn-button-secondary kn-job-view" data-job-id="${job.id}">
                   View
@@ -631,7 +779,7 @@ function renderRoute(pathname: RouteKey) {
         .join('')
 
       listEl.innerHTML = items
-      attachJobCardHandlers(listEl)
+      attachJobCardHandlers(listEl, handleFilterChange)
     }
 
     function handleFilterChange() {
@@ -664,6 +812,11 @@ function renderRoute(pathname: RouteKey) {
       handleFilterChange()
     })
 
+    statusSelect?.addEventListener('change', () => {
+      state.status = statusSelect?.value ?? 'all'
+      handleFilterChange()
+    })
+
     sortSelect?.addEventListener('change', () => {
       const value = sortSelect?.value as 'latest' | 'match' | 'salary'
       state.sort = value
@@ -672,6 +825,24 @@ function renderRoute(pathname: RouteKey) {
 
     showOnlyMatchesCheckbox?.addEventListener('change', () => {
       state.showOnlyMatches = showOnlyMatchesCheckbox?.checked ?? false
+      handleFilterChange()
+    })
+
+    clearAllBtn?.addEventListener('click', () => {
+      state.keyword = ''
+      state.location = 'all'
+      state.mode = 'all'
+      state.experience = 'all'
+      state.source = 'all'
+      state.status = 'all'
+      state.showOnlyMatches = false
+      keywordInput && (keywordInput.value = '')
+      locationSelect && (locationSelect.value = 'all')
+      modeSelect && (modeSelect.value = 'all')
+      experienceSelect && (experienceSelect.value = 'all')
+      sourceSelect && (sourceSelect.value = 'all')
+      statusSelect && (statusSelect.value = 'all')
+      showOnlyMatchesCheckbox && (showOnlyMatchesCheckbox.checked = false)
       handleFilterChange()
     })
 
@@ -834,6 +1005,7 @@ function renderRoute(pathname: RouteKey) {
     if (listEl) {
       const items = savedJobs
         .map((job) => {
+          const jobStatus = getJobStatus(job.id)
           return `
             <article class="kn-card kn-job-card" data-job-id="${job.id}">
               <header class="kn-job-header">
@@ -848,6 +1020,12 @@ function renderRoute(pathname: RouteKey) {
                 <span>${formatExperience(job.experience)}</span>
                 <span>${job.salaryRange}</span>
                 <span>${formatPostedAgo(job.postedDaysAgo)}</span>
+              </div>
+              <div class="kn-job-status-group">
+                ${(['Not Applied', 'Applied', 'Rejected', 'Selected'] as const).map(
+                  (s) =>
+                    `<button type="button" class="kn-status-btn ${jobStatus === s ? getStatusBadgeClass(s) : 'kn-status-btn-inactive'}" data-job-id="${job.id}" data-status="${s}">${s}</button>`,
+                ).join('')}
               </div>
               <div class="kn-job-actions">
                 <button type="button" class="kn-button kn-button-secondary kn-job-view" data-job-id="${job.id}">
@@ -963,10 +1141,32 @@ function renderRoute(pathname: RouteKey) {
                 .join('')}
             </div>
             <footer class="kn-digest-footer">
-              <p class="kn-body-text kn-body-muted">
+            <p class="kn-body-text kn-body-muted">
                 This digest was generated based on your preferences.
               </p>
             </footer>
+            ${(() => {
+              const history = readStatusHistory()
+              if (history.length === 0) return ''
+              const entries = history.slice(0, 10)
+              return `
+            <section class="kn-digest-status-updates">
+              <h3 class="kn-heading-3">Recent Status Updates</h3>
+              <ul class="kn-status-updates-list">
+                ${entries
+                  .map((e) => {
+                    const job = findJobById(e.jobId)
+                    if (!job) return ''
+                    const d = new Date(e.changedAt)
+                    const dateStr = d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })
+                    return `<li><strong>${job.title}</strong> · ${job.company} · <span class="${getStatusBadgeClass(e.status)}">${e.status}</span> · ${dateStr}</li>`
+                  })
+                  .filter(Boolean)
+                  .join('')}
+              </ul>
+            </section>
+              `
+            })()}
           </div>
           <div class="kn-digest-actions">
             <button type="button" class="kn-button kn-button-secondary" id="kn-digest-copy">
@@ -1037,10 +1237,35 @@ function renderRoute(pathname: RouteKey) {
   }
 }
 
-function attachJobCardHandlers(root: HTMLElement) {
+function attachJobCardHandlers(root: HTMLElement, onStatusChange?: () => void) {
   const viewButtons = root.querySelectorAll<HTMLButtonElement>('.kn-job-view')
   const saveButtons = root.querySelectorAll<HTMLButtonElement>('.kn-job-save')
   const applyButtons = root.querySelectorAll<HTMLButtonElement>('.kn-job-apply')
+  const statusButtons = root.querySelectorAll<HTMLButtonElement>('.kn-status-btn')
+
+  statusButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.getAttribute('data-job-id')
+      const status = button.getAttribute('data-status') as JobStatus | null
+      if (!id || !status) return
+      setJobStatus(id, status)
+      if (status === 'Applied' || status === 'Rejected' || status === 'Selected') {
+        const s = status as 'Applied' | 'Rejected' | 'Selected'
+        addStatusHistory(id, s)
+        showToast(`Status updated: ${status}`)
+      }
+      const group = button.closest('.kn-job-status-group')
+      group?.querySelectorAll('.kn-status-btn').forEach((btn) => {
+        btn.classList.remove('kn-status-neutral', 'kn-status-applied', 'kn-status-rejected', 'kn-status-selected')
+        btn.classList.add('kn-status-btn-inactive')
+        if (btn.getAttribute('data-status') === status) {
+          btn.classList.remove('kn-status-btn-inactive')
+          btn.classList.add(getStatusBadgeClass(status))
+        }
+      })
+      onStatusChange?.()
+    })
+  })
 
   viewButtons.forEach((button) => {
     button.addEventListener('click', () => {

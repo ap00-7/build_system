@@ -609,6 +609,114 @@ body {
   border: 1px solid var(--kn-color-border-subtle);
 }
 
+/* Job status badges and buttons */
+.kn-job-status-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--kn-space-1);
+  padding: var(--kn-space-1) 0;
+}
+
+.kn-status-btn {
+  padding: 0 var(--kn-space-1);
+  height: 28px;
+  font-size: 12px;
+  border-radius: var(--kn-radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity var(--kn-transition-fast);
+}
+
+.kn-status-btn:hover {
+  opacity: 0.9;
+}
+
+.kn-status-btn-inactive {
+  background-color: rgba(17, 17, 17, 0.04);
+  color: var(--kn-color-text-subtle);
+  border-color: var(--kn-color-border-subtle);
+}
+
+.kn-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--kn-space-1);
+  border-radius: var(--kn-radius-md);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.kn-status-neutral {
+  background-color: rgba(17, 17, 17, 0.06);
+  color: var(--kn-color-text-muted);
+  border: 1px solid var(--kn-color-border-subtle);
+}
+
+.kn-status-applied {
+  background-color: rgba(30, 64, 175, 0.12);
+  color: #1e40af;
+  border: 1px solid rgba(30, 64, 175, 0.3);
+}
+
+.kn-status-rejected {
+  background-color: rgba(139, 0, 0, 0.12);
+  color: var(--kn-color-accent);
+  border: 1px solid rgba(139, 0, 0, 0.3);
+}
+
+.kn-status-selected {
+  background-color: rgba(47, 107, 79, 0.12);
+  color: var(--kn-color-success);
+  border: 1px solid rgba(47, 107, 79, 0.3);
+}
+
+/* Toast */
+.kn-toast {
+  position: fixed;
+  bottom: var(--kn-space-4);
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: var(--kn-space-2) var(--kn-space-3);
+  background-color: var(--kn-color-text);
+  color: var(--kn-color-bg);
+  border-radius: var(--kn-radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 50;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.kn-toast.kn-toast-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Digest Recent Status Updates */
+.kn-digest-status-updates {
+  padding-top: var(--kn-space-3);
+  margin-top: var(--kn-space-3);
+  border-top: 1px solid var(--kn-color-border-subtle);
+}
+
+.kn-digest-status-updates .kn-heading-3 {
+  margin: 0 0 var(--kn-space-2);
+}
+
+.kn-status-updates-list {
+  margin: 0;
+  padding-left: var(--kn-space-3);
+  list-style: disc;
+}
+
+.kn-status-updates-list li {
+  margin-bottom: var(--kn-space-1);
+  font-size: 14px;
+}
+
 .kn-job-header-badges {
   display: flex;
   align-items: center;
