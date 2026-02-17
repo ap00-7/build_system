@@ -39,6 +39,8 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
               <a href="/saved" data-route class="kn-subnav-link">Saved</a>
               <a href="/digest" data-route class="kn-subnav-link">Digest</a>
               <a href="/settings" data-route class="kn-subnav-link">Settings</a>
+              <a href="/jt/07-test" data-route class="kn-subnav-link">Test</a>
+              <a href="/jt/08-ship" data-route class="kn-subnav-link">Ship</a>
               <a href="/proof" data-route class="kn-subnav-link">Proof</a>
             </div>
           </nav>
@@ -98,9 +100,60 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   </div>
 `
 
-type RoutePath = '/' | '/dashboard' | '/saved' | '/digest' | '/settings' | '/proof'
+type RoutePath =
+  | '/'
+  | '/dashboard'
+  | '/saved'
+  | '/digest'
+  | '/settings'
+  | '/jt/07-test'
+  | '/jt/08-ship'
+  | '/proof'
 
 type RouteKey = RoutePath | 'not-found'
+
+const TEST_CHECKLIST_KEY = 'jobTrackerTestChecklist'
+
+const TEST_CHECKLIST_ITEMS = [
+  { id: 'prefs-persist', label: 'Preferences persist after refresh', tooltip: 'Set prefs in Settings, refresh, confirm values are restored.' },
+  { id: 'match-score', label: 'Match score calculates correctly', tooltip: 'Set preferences, verify job cards show scores and badges.' },
+  { id: 'show-matches', label: '"Show only matches" toggle works', tooltip: 'Enable toggle, verify only jobs above threshold show.' },
+  { id: 'save-persist', label: 'Save job persists after refresh', tooltip: 'Save a job, refresh, go to Saved, confirm it appears.' },
+  { id: 'apply-new-tab', label: 'Apply opens in new tab', tooltip: 'Click Apply on a job, verify new tab opens with apply URL.' },
+  { id: 'status-persist', label: 'Status update persists after refresh', tooltip: 'Change status to Applied, refresh, confirm status remains.' },
+  { id: 'status-filter', label: 'Status filter works correctly', tooltip: 'Filter by Applied/Rejected/Selected, verify correct jobs show.' },
+  { id: 'digest-top10', label: 'Digest generates top 10 by score', tooltip: 'Generate digest, confirm 10 jobs sorted by match score.' },
+  { id: 'digest-persist', label: 'Digest persists for the day', tooltip: 'Generate digest, refresh, confirm same digest loads.' },
+  { id: 'no-console', label: 'No console errors on main pages', tooltip: 'Visit Dashboard, Saved, Digest, Settings; check DevTools console.' },
+] as const
+
+function readTestChecklist(): boolean[] {
+  try {
+    const raw = window.localStorage.getItem(TEST_CHECKLIST_KEY)
+    if (!raw) return new Array(TEST_CHECKLIST_ITEMS.length).fill(false)
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return new Array(TEST_CHECKLIST_ITEMS.length).fill(false)
+    return TEST_CHECKLIST_ITEMS.map((_, i) => Boolean(parsed[i]))
+  } catch {
+    return new Array(TEST_CHECKLIST_ITEMS.length).fill(false)
+  }
+}
+
+function writeTestChecklist(checks: boolean[]): void {
+  try {
+    window.localStorage.setItem(TEST_CHECKLIST_KEY, JSON.stringify(checks))
+  } catch {
+    /* ignore */
+  }
+}
+
+function getTestsPassedCount(): number {
+  return readTestChecklist().filter(Boolean).length
+}
+
+function areAllTestsPassed(): boolean {
+  return getTestsPassedCount() === TEST_CHECKLIST_ITEMS.length
+}
 
 type FilterState = {
   keyword: string
@@ -498,6 +551,8 @@ function normalizePath(pathname: string): RouteKey {
   if (cleaned === '/saved') return '/saved'
   if (cleaned === '/digest') return '/digest'
   if (cleaned === '/settings') return '/settings'
+  if (cleaned === '/jt/07-test') return '/jt/07-test'
+  if (cleaned === '/jt/08-ship') return '/jt/08-ship'
   if (cleaned === '/proof') return '/proof'
   return 'not-found'
 }
@@ -1221,6 +1276,100 @@ function renderRoute(pathname: RouteKey) {
     }
 
     renderDigest()
+    return
+  }
+
+  if (pathname === '/jt/07-test') {
+    const checks = readTestChecklist()
+    const passed = checks.filter(Boolean).length
+
+    container.innerHTML = `
+      <div class="kn-test-checklist">
+        <div class="kn-test-summary">
+          <h2 class="kn-heading-2">Tests Passed: ${passed} / ${TEST_CHECKLIST_ITEMS.length}</h2>
+          ${passed < TEST_CHECKLIST_ITEMS.length ? `
+            <p class="kn-test-warning">Resolve all issues before shipping.</p>
+          ` : ''}
+        </div>
+        <button type="button" class="kn-button kn-button-secondary kn-test-reset" id="kn-test-reset">Reset Test Status</button>
+        <ul class="kn-test-list">
+          ${TEST_CHECKLIST_ITEMS.map(
+            (item, i) => `
+            <li class="kn-test-item">
+              <label class="kn-test-label">
+                <input type="checkbox" class="kn-test-checkbox" data-index="${i}" ${checks[i] ? 'checked' : ''} />
+                <span class="kn-test-text">${item.label}</span>
+                <span class="kn-test-tooltip" title="${escapeHtml(item.tooltip)}">?</span>
+              </label>
+            </li>
+          `,
+          ).join('')}
+        </ul>
+      </div>
+    `
+
+    const checkboxes = container.querySelectorAll<HTMLInputElement>('.kn-test-checkbox')
+    checkboxes.forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const idx = parseInt(cb.getAttribute('data-index') ?? '-1', 10)
+        if (idx < 0 || idx >= checks.length) return
+        checks[idx] = cb.checked
+        writeTestChecklist(checks)
+        const passed = checks.filter(Boolean).length
+        const summaryEl = container.querySelector('.kn-test-summary .kn-heading-2')
+        const warningEl = container.querySelector('.kn-test-warning')
+        if (summaryEl) summaryEl.textContent = `Tests Passed: ${passed} / ${TEST_CHECKLIST_ITEMS.length}`
+        if (passed < TEST_CHECKLIST_ITEMS.length && !warningEl) {
+          const p = document.createElement('p')
+          p.className = 'kn-test-warning'
+          p.textContent = 'Resolve all issues before shipping.'
+          container.querySelector('.kn-test-summary')?.appendChild(p)
+        } else if (passed >= TEST_CHECKLIST_ITEMS.length && warningEl) {
+          warningEl.remove()
+        }
+      })
+    })
+
+    container.querySelector('#kn-test-reset')?.addEventListener('click', () => {
+      const empty = new Array(TEST_CHECKLIST_ITEMS.length).fill(false)
+      writeTestChecklist(empty)
+      const target: RoutePath = '/jt/07-test'
+      window.history.pushState({ path: target }, '', target)
+      renderRoute(target)
+      setActiveLink(target)
+    })
+    return
+  }
+
+  if (pathname === '/jt/08-ship') {
+    const allPassed = areAllTestsPassed()
+
+    if (!allPassed) {
+      container.innerHTML = `
+        <div class="kn-ship-locked">
+          <div class="kn-empty-state-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          <h2 class="kn-heading-2">Ship locked</h2>
+          <p class="kn-body-text kn-body-muted kn-empty-state-desc">
+            Complete all 10 tests in the Test checklist to unlock Ship.
+          </p>
+          <a href="/jt/07-test" data-route class="kn-button kn-button-primary">Go to Test</a>
+        </div>
+      `
+      return
+    }
+
+    container.innerHTML = `
+      <div class="kn-ship-ready">
+        <h2 class="kn-heading-2">Ready to ship</h2>
+        <p class="kn-body-text kn-body-muted">
+          All tests passed. You're clear to deploy.
+        </p>
+      </div>
+    `
     return
   }
 
