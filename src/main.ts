@@ -122,6 +122,80 @@ function escapeHtml(s: string): string {
 
 const SAVED_JOBS_KEY = 'kn-saved-jobs'
 const PREFERENCES_KEY = 'jobTrackerPreferences'
+const DIGEST_PREFIX = 'jobTrackerDigest_'
+
+type DigestEntry = { id: string; matchScore: number }
+
+function getTodayDateKey(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function getDigestKey(dateKey: string): string {
+  return `${DIGEST_PREFIX}${dateKey}`
+}
+
+function readDigest(dateKey: string): DigestEntry[] | null {
+  try {
+    const raw = window.localStorage.getItem(getDigestKey(dateKey))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return null
+    return parsed.filter(
+      (x): x is DigestEntry =>
+        x && typeof x === 'object' && typeof (x as DigestEntry).id === 'string' && typeof (x as DigestEntry).matchScore === 'number',
+    )
+  } catch {
+    return null
+  }
+}
+
+function writeDigest(dateKey: string, entries: DigestEntry[]): void {
+  try {
+    window.localStorage.setItem(getDigestKey(dateKey), JSON.stringify(entries))
+  } catch {
+    /* ignore */
+  }
+}
+
+function generateDigestJobs(prefs: JobTrackerPreferences): DigestEntry[] {
+  const scored = jobs.map((job) => ({
+    ...job,
+    matchScore: computeMatchScore(job, prefs),
+  }))
+  const sorted = scored.sort((a, b) => {
+    if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore
+    return a.postedDaysAgo - b.postedDaysAgo
+  })
+  return sorted.slice(0, 10).map((j) => ({ id: j.id, matchScore: j.matchScore }))
+}
+
+function formatDigestDate(dateKey: string): string {
+  const d = new Date(dateKey)
+  return d.toLocaleDateString('en-IN', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+function digestToPlainText(entries: DigestEntry[]): string {
+  const lines: string[] = [
+    'Top 10 Jobs For You — 9AM Digest',
+    formatDigestDate(getTodayDateKey()),
+    '',
+  ]
+  entries.forEach((e, i) => {
+    const job = findJobById(e.id)
+    if (!job) return
+    lines.push(`${i + 1}. ${job.title} | ${job.company}`)
+    lines.push(`   ${job.location} · ${formatExperience(job.experience)} · ${e.matchScore}% match`)
+    lines.push(`   ${job.applyUrl}`)
+    lines.push('')
+  })
+  lines.push('This digest was generated based on your preferences.')
+  return lines.join('\n')
+}
 
 type JobTrackerPreferences = {
   roleKeywords: string
@@ -799,14 +873,154 @@ function renderRoute(pathname: RouteKey) {
   }
 
   if (pathname === '/digest') {
-    container.innerHTML = `
-      <div class="kn-card kn-empty-card">
-        <h2 class="kn-heading-2">Digest</h2>
-        <p class="kn-body-text kn-body-muted">
-          Your daily 9AM job digest will be designed here in the next step.
-        </p>
-      </div>
-    `
+    const prefs = readPreferences()
+    const prefsSet = hasPreferencesSet(prefs)
+    const dateKey = getTodayDateKey()
+    let digestEntries = readDigest(dateKey)
+
+    function renderDigest() {
+      if (!container) return
+      if (!prefsSet) {
+        container.innerHTML = `
+          <div class="kn-digest-blocking">
+            <div class="kn-empty-state-icon">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+            </div>
+            <h2 class="kn-heading-2">Set preferences to generate a personalized digest.</h2>
+            <p class="kn-body-text kn-body-muted kn-empty-state-desc">
+              Go to Settings to configure your role keywords, locations, mode, and skills.
+            </p>
+            <a href="/settings" data-route class="kn-button kn-button-primary kn-empty-state-cta">Go to Settings</a>
+          </div>
+        `
+        return
+      }
+
+      if (!digestEntries || digestEntries.length === 0) {
+        const hasTried = digestEntries !== null && digestEntries.length === 0
+        container.innerHTML = `
+          <div class="kn-digest-container">
+            ${hasTried ? `
+              <p class="kn-body-text kn-body-muted kn-digest-empty">
+                No matching roles today. Check again tomorrow.
+              </p>
+            ` : `
+              <p class="kn-body-text kn-body-muted kn-digest-prompt">
+                Generate your personalized 9AM digest based on your preferences.
+              </p>
+            `}
+            <p class="kn-body-text kn-body-muted kn-digest-note">
+              Demo Mode: Daily 9AM trigger simulated manually.
+            </p>
+            <button type="button" class="kn-button kn-button-primary" id="kn-digest-generate">
+              Generate Today's 9AM Digest (Simulated)
+            </button>
+          </div>
+        `
+        attachDigestGenerate()
+        return
+      }
+
+      const jobDetails = digestEntries
+        .map((e) => findJobById(e.id))
+        .filter((j): j is Job => j != null)
+
+      if (jobDetails.length === 0) {
+        digestEntries = []
+        renderDigest()
+        return
+      }
+
+      container.innerHTML = `
+        <div class="kn-digest-container">
+          <div class="kn-digest-card">
+            <header class="kn-digest-header">
+              <h2 class="kn-heading-2">Top 10 Jobs For You — 9AM Digest</h2>
+              <p class="kn-body-text kn-body-muted">${formatDigestDate(dateKey)}</p>
+            </header>
+            <div class="kn-digest-jobs">
+              ${jobDetails
+                .map((job) => {
+                  const entry = digestEntries!.find((e) => e.id === job.id)!
+                  const badgeClass = getMatchBadgeClass(entry.matchScore)
+                  return `
+                    <article class="kn-digest-job">
+                      <div class="kn-digest-job-main">
+                        <h3 class="kn-heading-3">${job.title}</h3>
+                        <p class="kn-body-text kn-body-muted">${job.company}</p>
+                        <div class="kn-digest-job-meta">
+                          <span>${job.location}</span>
+                          <span>${formatExperience(job.experience)}</span>
+                          <span class="${badgeClass}">${entry.matchScore}% match</span>
+                        </div>
+                      </div>
+                      <a href="${job.applyUrl}" target="_blank" rel="noopener" class="kn-button kn-button-primary kn-digest-apply">Apply</a>
+                    </article>
+                  `
+                })
+                .join('')}
+            </div>
+            <footer class="kn-digest-footer">
+              <p class="kn-body-text kn-body-muted">
+                This digest was generated based on your preferences.
+              </p>
+            </footer>
+          </div>
+          <div class="kn-digest-actions">
+            <button type="button" class="kn-button kn-button-secondary" id="kn-digest-copy">
+              Copy Digest to Clipboard
+            </button>
+            <a href="#" id="kn-digest-email" class="kn-button kn-button-secondary">Create Email Draft</a>
+          </div>
+          <p class="kn-digest-note">Demo Mode: Daily 9AM trigger simulated manually.</p>
+        </div>
+      `
+
+      const copyBtn = container.querySelector<HTMLButtonElement>('#kn-digest-copy')
+      const emailLink = container.querySelector<HTMLAnchorElement>('#kn-digest-email')
+      const plainText = digestToPlainText(digestEntries)
+
+      copyBtn?.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(plainText)
+          copyBtn.textContent = 'Copied!'
+          setTimeout(() => {
+            copyBtn.textContent = 'Copy Digest to Clipboard'
+          }, 2000)
+        } catch {
+          /* fallback or ignore */
+        }
+      })
+
+      const subject = encodeURIComponent('My 9AM Job Digest')
+      const body = encodeURIComponent(plainText)
+      emailLink?.setAttribute('href', `mailto:?subject=${subject}&body=${body}`)
+    }
+
+    function attachDigestGenerate() {
+      if (!container) return
+      const btn = container.querySelector<HTMLButtonElement>('#kn-digest-generate')
+      btn?.addEventListener('click', () => {
+        const existing = readDigest(dateKey)
+        if (existing && existing.length > 0) {
+          digestEntries = existing
+          renderDigest()
+          return
+        }
+        digestEntries = generateDigestJobs(prefs)
+        if (digestEntries.length === 0) {
+          writeDigest(dateKey, [])
+          renderDigest()
+          return
+        }
+        writeDigest(dateKey, digestEntries)
+        renderDigest()
+      })
+    }
+
+    renderDigest()
     return
   }
 

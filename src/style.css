@@ -373,6 +373,121 @@ body {
   text-decoration: none;
 }
 
+/* Digest */
+.kn-digest-blocking,
+.kn-digest-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--kn-space-4);
+  gap: var(--kn-space-3);
+}
+
+.kn-digest-blocking .kn-heading-2,
+.kn-digest-blocking .kn-empty-state-desc {
+  margin: 0;
+}
+
+.kn-digest-card {
+  width: 100%;
+  max-width: 640px;
+  background-color: #ffffff;
+  border-radius: var(--kn-radius-md);
+  border: 1px solid var(--kn-color-border-subtle);
+  padding: var(--kn-space-4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.kn-digest-header {
+  padding-bottom: var(--kn-space-3);
+  border-bottom: 1px solid var(--kn-color-border-subtle);
+  margin-bottom: var(--kn-space-3);
+}
+
+.kn-digest-header .kn-heading-2 {
+  margin: 0 0 var(--kn-space-1);
+}
+
+.kn-digest-header .kn-body-text {
+  margin: 0;
+}
+
+.kn-digest-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-space-2);
+}
+
+.kn-digest-job {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--kn-space-3);
+  padding: var(--kn-space-2) 0;
+  border-bottom: 1px solid var(--kn-color-border-subtle);
+}
+
+.kn-digest-job:last-child {
+  border-bottom: none;
+}
+
+.kn-digest-job-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.kn-digest-job-main .kn-heading-3 {
+  margin: 0 0 var(--kn-space-1);
+}
+
+.kn-digest-job-main .kn-body-text {
+  margin: 0 0 var(--kn-space-1);
+}
+
+.kn-digest-job-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kn-space-2);
+  font-size: 14px;
+  color: var(--kn-color-text-subtle);
+}
+
+.kn-digest-apply {
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.kn-digest-footer {
+  padding-top: var(--kn-space-3);
+  margin-top: var(--kn-space-3);
+  border-top: 1px solid var(--kn-color-border-subtle);
+}
+
+.kn-digest-footer .kn-body-text {
+  margin: 0;
+  font-size: 14px;
+}
+
+.kn-digest-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kn-space-2);
+  justify-content: center;
+}
+
+.kn-digest-note {
+  font-size: 12px;
+  color: var(--kn-color-text-subtle);
+  margin: 0;
+}
+
+.kn-digest-empty,
+.kn-digest-prompt {
+  margin: 0;
+  max-width: 400px;
+}
+
 /* Dashboard jobs */
 
 .kn-dashboard {
